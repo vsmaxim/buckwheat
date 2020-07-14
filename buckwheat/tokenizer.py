@@ -1,27 +1,28 @@
 """
 Tokenization-related functionality.
 """
+from collections import deque
 import logging
 import os
-from collections import deque
 from tempfile import TemporaryDirectory
 from typing import Iterator, List, Optional, Set, Tuple, Union
 
-import pygments
-import tree_sitter
 from joblib import cpu_count, delayed, Parallel
+import pygments
 from pygments.lexers.haskell import HaskellLexer
 from pygments.lexers.jvm import KotlinLexer, ScalaLexer
 from pygments.lexers.objective import SwiftLexer
+import tree_sitter
 
-from .language_recognition.utils import recognize_languages_dir
-from .parsing.utils import get_parser
-from .saver import OutputFormats
-from .subtokenizer import TokenParser
-from .utils import SUPPORTED_LANGUAGES, PARSING_MODES, GRANULARITIES, OUTPUT_FORMATS, \
-    IdentifiersTypes, ObjectTypes, FileData, IdentifierData, ObjectData, RepositoryError, \
+from buckwheat.language_recognition.utils import recognize_languages_dir
+from buckwheat.parsing.utils import get_parser
+from buckwheat.saver import OutputFormats
+from buckwheat.subtokenizer import TokenParser
+from buckwheat.utils import SUPPORTED_LANGUAGES, PARSING_MODES, GRANULARITIES, OUTPUT_FORMATS, \
+    RepositoryError, \
     assert_trailing_slash, clone_repository, get_full_path, get_latest_commit, read_file, \
     to_batches, transform_files_list
+from buckwheat.types import IdentifierData, ObjectData, ObjectTypes, IdentifiersTypes, FileData
 
 # TODO: better naming
 # TODO: add AST functionality
@@ -149,30 +150,22 @@ class TreeSitterParser:
                 yield node
 
     @staticmethod
-    def get_identifier_from_node(code: bytes, node: tree_sitter.Node,
-                                 identifiers_verbose: bool = False) -> Union[str, IdentifierData]:
+    def get_identifier_from_node(code: bytes, node: tree_sitter.Node) -> IdentifierData:
         """
         Given an identifier node of the AST and the code from which this AST was built,
         return the identifier.
         :param code: the original code in bytes.
         :param node: the node of the tree-sitter AST.
-        :param identifiers_verbose: if True, will return not only the identifier itself,
-                                    but also its parameters as IdentifierData.
         :return: str with just identifier or an IdentifierData object.
         """
         start_byte, end_byte = TreeSitterParser.get_positional_bytes(node)
         identifier = code[start_byte:end_byte].decode("utf-8")
-        if not identifiers_verbose:
-            return identifier
-        else:
-            start_line, start_column = node.start_point
-            return IdentifierData(identifier, start_byte, start_line, start_column)
+        start_line, start_column = node.start_point
+        return IdentifierData(identifier, start_byte, start_line, start_column)
 
     @staticmethod
     def get_identifiers_sequence_from_node(code: bytes, node: tree_sitter.Node, lang: str,
-                                           identifiers_verbose: bool = False,
-                                           subtokenize: bool = False) -> \
-            Union[List[str], List[IdentifierData]]:
+                                           subtokenize: bool = False) -> List[IdentifierData]:
         """
         Given a node of the AST and the code from which this AST was built, gather a list of
         identifiers in it.
@@ -188,7 +181,8 @@ class TreeSitterParser:
         tokens_sequence = []
 
         for token_node in token_nodes:
-            token = TreeSitterParser.get_identifier_from_node(code, token_node, identifiers_verbose)
+            token = TreeSitterParser.get_identifier_from_node(code, token_node)
+
             if not subtokenize:
                 tokens_sequence.append(token)
             else:
@@ -198,9 +192,7 @@ class TreeSitterParser:
         return tokens_sequence
 
     @staticmethod
-    def get_identifiers_sequence_from_code(code: str, lang: str, identifiers_verbose: bool = False,
-                                           subtokenize: bool = False) -> \
-            Union[List[str], List[IdentifierData]]:
+    def get_identifiers_sequence_from_code(code: str, lang: str, subtokenize: bool = False) -> List[IdentifierData]:
         """
         Given the code and its language, gather identifiers in it.
         :param code: source code as a string.
@@ -213,14 +205,11 @@ class TreeSitterParser:
         code = bytes(code, "utf-8")
         tree = get_parser(TreeSitterParser.PARSERS[lang]).parse(code)
         root = tree.root_node
-        return TreeSitterParser.get_identifiers_sequence_from_node(code, root, lang,
-                                                                   identifiers_verbose,
-                                                                   subtokenize)
+        return TreeSitterParser.get_identifiers_sequence_from_node(code, root, lang, subtokenize)
 
     @staticmethod
     def get_object_from_node(object_type: ObjectTypes, code: bytes, node: tree_sitter.Node,
-                             lang: str, identifiers_verbose: bool = False,
-                             subtokenize: bool = False) -> ObjectData:
+                             lang: str, subtokenize: bool = False) -> ObjectData:
         """
         Given a node of the AST, its type, and the code from which this AST was built,
         compile an ObjectData object.
@@ -237,17 +226,10 @@ class TreeSitterParser:
         content = code[start_byte:end_byte].decode("utf-8")
         start_line, start_column = node.start_point
         end_line, end_column = node.end_point
-        identifiers = TreeSitterParser.get_identifiers_sequence_from_node(code, node, lang,
-                                                                          identifiers_verbose,
-                                                                          subtokenize)
-        if identifiers_verbose:
-            identifiers_type = IdentifiersTypes.VERBOSE
-        else:
-            identifiers_type = IdentifiersTypes.STRING
-        return ObjectData(object_type=object_type, content=content, lang=lang,
-                          identifiers=identifiers, identifiers_type=identifiers_type,
-                          start_byte=start_byte, start_line=start_line, start_column=start_column,
-                          end_byte=end_byte, end_line=end_line, end_column=end_column)
+        identifiers = TreeSitterParser.get_identifiers_sequence_from_node(code, node, lang, subtokenize)
+        return ObjectData(object_type=object_type, content=content, lang=lang, identifiers=identifiers,
+                          start_byte=start_byte, start_line=start_line, start_column=start_column, end_byte=end_byte,
+                          end_line=end_line, end_column=end_column)
 
     @staticmethod
     def merge_nodes_for_lang(lang: str) -> Set[str]:
@@ -387,13 +369,13 @@ class PygmentsParser:
             identifiers_type = IdentifiersTypes.VERBOSE
         else:
             identifiers_type = IdentifiersTypes.STRING
+
         # The "objects" are always empty, because Pygments don't support recognizing them.
         return FileData(path=file, lang=lang, objects=[], identifiers=identifiers,
                         identifiers_type=identifiers_type)
 
 
-def get_identifiers_sequence_from_code(code: str, lang: str, identifiers_verbose: bool = False,
-                                       subtokenize: bool = False) -> \
+def get_identifiers_sequence_from_code(code: str, lang: str, subtokenize: bool = False) -> \
         Union[List[str], List[IdentifierData]]:
     """
     Given the code and its language, gather its identifiers.
@@ -405,18 +387,14 @@ def get_identifiers_sequence_from_code(code: str, lang: str, identifiers_verbose
     :return: list of identifiers as either strings or IdentifierData objects.
     """
     if lang in SUPPORTED_LANGUAGES["tree-sitter"]:
-        return TreeSitterParser.get_identifiers_sequence_from_code(code, lang, identifiers_verbose,
-                                                                   subtokenize)
+        return TreeSitterParser.get_identifiers_sequence_from_code(code, lang, subtokenize)
     elif lang in SUPPORTED_LANGUAGES["pygments"]:
-        return PygmentsParser.get_identifiers_sequence_from_code(code, lang, identifiers_verbose,
-                                                                 subtokenize)
+        return PygmentsParser.get_identifiers_sequence_from_code(code, lang, subtokenize)
     else:
         raise ValueError("Unsupported language!")
 
 
-def get_identifiers_sequence_from_file(file: str, lang: str, identifiers_verbose: bool = False,
-                                       subtokenize: bool = False) -> \
-        Union[List[str], List[IdentifierData]]:
+def get_identifiers_sequence_from_file(file: str, lang: str, subtokenize: bool = False) -> List[IdentifierData]:
     """
     Given the file and its language, gather subtokens of identifiers as IdentifierData objects.
     :param file: path to file.
@@ -427,7 +405,7 @@ def get_identifiers_sequence_from_file(file: str, lang: str, identifiers_verbose
     :return: list of identifiers as either strings or IdentifierData objects.
     """
     code = read_file(file)
-    return get_identifiers_sequence_from_code(code, lang, identifiers_verbose, subtokenize)
+    return get_identifiers_sequence_from_code(code, lang, subtokenize=subtokenize)
 
 
 def get_data_from_file(file: str, lang: str, gather_objects: bool, gather_identifiers: bool,

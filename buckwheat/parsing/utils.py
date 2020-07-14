@@ -7,7 +7,7 @@ import urllib.request
 
 from tree_sitter import Language, Parser
 
-from ..language_recognition.utils import identify_system
+from buckwheat.language_recognition.utils import identify_system
 
 DOWNLOAD_URLS = {
     "Linux":

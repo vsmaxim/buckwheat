@@ -1,16 +1,17 @@
 """
 Auxiliary functionality.
 """
-import dataclasses
 from enum import Enum
 import os
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Set, Callable
 
 # TODO: better naming
 
 # Languages supported in various
 # TODO: language names' normalization (c_sharp, C#, csharp -> C#), maybe within Enry?
+from buckwheat.types import ASTNode, IdentifiersParsedNode
+
 SUPPORTED_LANGUAGES = {"tree-sitter": {"JavaScript", "Python", "Java", "Go", "C++", "Ruby",
                                        "TypeScript", "TSX", "PHP", "C#", "C", "Shell", "Rust"},
                        "pygments": {"Scala", "Swift", "Kotlin", "Haskell"},
@@ -29,62 +30,6 @@ GRANULARITIES = {"projects", "files", "classes", "functions"}
 OUTPUT_FORMATS = {"wabbit", "json"}
 
 
-class ObjectTypes(Enum):
-    CLASS = "class"
-    FUNCTION = "function"
-
-
-class IdentifiersTypes(Enum):
-    """
-    string = identifier itself
-    verbose = IdentifierData class
-    """
-    STRING = "string"
-    VERBOSE = "verbose"
-
-
-# TODO: consider the differences between str and byte from the standpoint of coordinates
-@dataclasses.dataclass
-class IdentifierData:
-    """
-    Data class to store individual identifiers and their positional coordinates.
-    """
-    identifier: str
-    start_byte: int
-    start_line: int
-    start_column: int
-
-
-@dataclasses.dataclass
-class ObjectData:
-    """
-    Data class to store objects (classes and functions) and their parameters: positional
-    coordinates, language and identifiers.
-    """
-    object_type: ObjectTypes
-    content: str
-    lang: str
-    identifiers: Union[List[IdentifierData], List[str]]
-    identifiers_type: IdentifiersTypes  # VERBOSE for IdentifierData, STRING for str.
-    start_byte: int
-    start_line: int
-    start_column: int
-    end_byte: int
-    end_line: int
-    end_column: int
-
-
-# TODO: think about the duplication of identifiers_type
-@dataclasses.dataclass
-class FileData:
-    """
-    Dataclass to store files and their content.
-    """
-    path: str
-    lang: str
-    objects: List[ObjectData]
-    identifiers: Union[List[IdentifierData], List[str]]
-    identifiers_type: IdentifiersTypes  # VERBOSE for IdentifierData, STRING for str.
 
 
 class RepositoryError(ValueError):
@@ -203,3 +148,43 @@ def transform_files_list(lang2files: Dict[str, List[str]], gran: str,
             for file in lang2files[lang]:
                 files.append((file, lang))
     return files
+
+
+def build_node_filter(types: Set[str]) -> Callable[[ASTNode], bool]:
+    """
+    Build predicate which returns True if node has given type
+
+    :param types: set of types to filter against
+    :return: predicate function
+    """
+    return lambda node: node.node.type in types
+
+
+def merge_tuples(left: Tuple[IdentifiersParsedNode, ...], right: Tuple[IdentifiersParsedNode, ...]) \
+        -> Tuple[IdentifiersParsedNode, ...]:
+    return left + right
+
+
+def reduce_to_tuple(result: Tuple[IdentifiersParsedNode, ...], identifier: IdentifiersParsedNode) \
+        -> Tuple[IdentifiersParsedNode, ...]:
+    return result + (identifier,)
+
+
+class ProgrammingLanguages(Enum):
+    CPP = "C++"
+    TSX = "TSX"
+    JS = "JavaScript"
+    GO = "Go"
+    JAVA = "Java"
+    RUBY = "Ruby"
+    TS = "TypeScript"
+    PHP = "PHP"
+    CSHARP = "C#"
+    C = "C"
+    SHELL = "Shell"
+    RUST = "Rust"
+    SCALA = "Scala"
+    SWIFT = "Swift"
+    KOTLIN = "Kotlin"
+    HASKELL = "Haskell"
+    PYTHON = "Python"

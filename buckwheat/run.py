@@ -5,10 +5,10 @@ import argparse
 import logging
 import sys
 
-from .language_recognition.utils import main as initialize_enry
-from .parsing.utils import main as initialize_parser
-from .tokenizer import tokenize_list_of_repositories
-from .utils import PARSING_MODES, GRANULARITIES, OUTPUT_FORMATS
+from buckwheat.language_recognition.utils import main as initialize_enry
+from buckwheat.parsing.utils import main as initialize_parser
+from buckwheat.tokenizer import tokenize_list_of_repositories
+from buckwheat.utils import PARSING_MODES, GRANULARITIES, OUTPUT_FORMATS
 
 
 def main(args: argparse.Namespace) -> None:
