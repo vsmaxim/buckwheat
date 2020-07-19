@@ -316,6 +316,7 @@ class PygmentsParser:
               "Swift": SwiftLexer(),
               "Kotlin": KotlinLexer(),
               "Haskell": HaskellLexer()}
+
     # Pygments token types corresponding to identifiers in a given language.
     IDENTIFIERS = {"Scala": {pygments.token.Name, pygments.token.Keyword.Type},
                    "Swift": {pygments.token.Name},
@@ -343,10 +344,12 @@ class PygmentsParser:
                     token = pair[1]
                 else:
                     token = IdentifierData(pair[1], 0, 0, 0)
+
                 if not subtokenize:
                     tokens.append(token)
                 else:
                     tokens.extend(subtokenize_identifier(token))
+
         return tokens
 
     @staticmethod
@@ -598,6 +601,7 @@ def tokenize_list_of_repositories(repositories_file: str, output_dir: str, batch
             filename = f"{output_format}_{mode}_{gran}_{count_batch}.txt"
             # Iterating over repositories in the batch
             # TODO: add progress bar
+
             for count_repository, repository in enumerate(batch):
                 logging.info(f"Tokenizing repository: {repository} ({count_repository + 1} "
                              f"out of {len(batch)} in batch {count_batch + 1}).")
@@ -610,8 +614,10 @@ def tokenize_list_of_repositories(repositories_file: str, output_dir: str, batch
                     logging.warning(f"{repository} is an incorrect link, skipping...")
                     continue
                 reps2files[repository_name] = files
+
             logging.info(f"Writing batch {count_batch + 1} out "
                          f"of {len(repositories_batches)} to file.")
+
             if len(reps2files.keys()) != 0:  # Skipping possible empty batches.
                 # Saving the batch in the necessary format.
                 OutputFormats(output_format, reps2files, mode, gran, output_dir, filename)

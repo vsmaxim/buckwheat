@@ -3,11 +3,11 @@ import tempfile
 from typing import List
 
 from buckwheat.tokenizer import recognize_languages_dir
-from buckwheat.types import LanguageClassifiedFile, Repository
+from buckwheat.types import LanguageClassifiedFile, Repository, ProgrammingLanguages
 from buckwheat.utils import clone_repository
 
 
-# TODO: Probably should be done with hydra.cc
+# TODO: Should be done with hydra.cc
 def get_repositories_list(repositories_file: str) -> List[str]:
     """
     Parse list of repositories from input file
@@ -32,37 +32,15 @@ def get_repository_instance(repository_link: str) -> Repository:
     return Repository(temp_directory, recognize_languages_dir(temp_directory))
 
 
-def build_language_filter(target_language: str):
+def transform_repository_to_files(repository: Repository) -> List[LanguageClassifiedFile]:
     """
-    Build function to filter files with given programming language
+    Transform repository to list of files with programming language specified
 
-    :param target_languages: language to filter against
-    :return: filter function
+    :param repository: repository instance
+    :return: list of files with programming languages
     """
-    def inner_filter(file: LanguageClassifiedFile) -> bool:
-        """Return True if file.language is target language otherwise return False"""
-        return file.language == target_language
-
-    return inner_filter
-
-
-def build_file_transformer():
-    """
-    Build function to transform repository instance to list of files with programming languages specified
-
-    :return: transform function
-    """
-    def transform_repository_to_files(repository: Repository) -> List[LanguageClassifiedFile]:
-        """
-        Transform repository to list of files with programming language specified
-
-        :param repository: repository instance
-        :return: list of files with programming languages
-        """
-        return [
-            LanguageClassifiedFile(os.path.join(repository.path, file), lang)
-            for lang, files in repository.language_file_index.items()
-            for file in files
-        ]
-
-    return transform_repository_to_files
+    return [
+        LanguageClassifiedFile(os.path.join(repository.path, file), ProgrammingLanguages(lang))
+        for lang, files in repository.language_file_index.items()
+        for file in files
+    ]

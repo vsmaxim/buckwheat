@@ -1,7 +1,6 @@
 """
 Auxiliary functionality.
 """
-from enum import Enum
 import os
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple, Set, Callable
@@ -10,7 +9,7 @@ from typing import Any, Dict, List, Optional, Tuple, Set, Callable
 
 # Languages supported in various
 # TODO: language names' normalization (c_sharp, C#, csharp -> C#), maybe within Enry?
-from buckwheat.types import ASTNode, IdentifiersParsedNode
+from buckwheat.types import Entity
 
 SUPPORTED_LANGUAGES = {"tree-sitter": {"JavaScript", "Python", "Java", "Go", "C++", "Ruby",
                                        "TypeScript", "TSX", "PHP", "C#", "C", "Shell", "Rust"},
@@ -28,8 +27,6 @@ GRANULARITIES = {"projects", "files", "classes", "functions"}
 
 # Supported output formats
 OUTPUT_FORMATS = {"wabbit", "json"}
-
-
 
 
 class RepositoryError(ValueError):
@@ -150,41 +147,11 @@ def transform_files_list(lang2files: Dict[str, List[str]], gran: str,
     return files
 
 
-def build_node_filter(types: Set[str]) -> Callable[[ASTNode], bool]:
+def build_node_filter(types: Set[str]) -> Callable[[Entity], bool]:
     """
     Build predicate which returns True if node has given type
 
     :param types: set of types to filter against
     :return: predicate function
     """
-    return lambda node: node.node.type in types
-
-
-def merge_tuples(left: Tuple[IdentifiersParsedNode, ...], right: Tuple[IdentifiersParsedNode, ...]) \
-        -> Tuple[IdentifiersParsedNode, ...]:
-    return left + right
-
-
-def reduce_to_tuple(result: Tuple[IdentifiersParsedNode, ...], identifier: IdentifiersParsedNode) \
-        -> Tuple[IdentifiersParsedNode, ...]:
-    return result + (identifier,)
-
-
-class ProgrammingLanguages(Enum):
-    CPP = "C++"
-    TSX = "TSX"
-    JS = "JavaScript"
-    GO = "Go"
-    JAVA = "Java"
-    RUBY = "Ruby"
-    TS = "TypeScript"
-    PHP = "PHP"
-    CSHARP = "C#"
-    C = "C"
-    SHELL = "Shell"
-    RUST = "Rust"
-    SCALA = "Scala"
-    SWIFT = "Swift"
-    KOTLIN = "Kotlin"
-    HASKELL = "Haskell"
-    PYTHON = "Python"
+    return lambda entity: entity.type in types
